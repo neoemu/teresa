@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 
+	log "github.com/Sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware"
@@ -91,6 +92,13 @@ func registerServices(s *grpc.Server, opt Options, uOps user.Operations) {
 	t.RegisterService(s)
 
 	appOps := app.NewOperations(tOps, opt.K8s, opt.Storage)
+	appOps.(*app.AppOperations).KopsFactory = func() app.K8sOperations {
+		c, err := k8s.New(&k8s.Config{DefaultServiceType: "LoadBalancer"})
+		if err != nil {
+			log.WithError(err).Printf("creating kops factory")
+		}
+		return c
+	}
 	a := app.NewService(appOps)
 	a.RegisterService(s)
 

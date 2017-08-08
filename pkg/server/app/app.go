@@ -2,10 +2,14 @@ package app
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"sync"
+	"time"
+
+	"golang.org/x/sync/errgroup"
 
 	log "github.com/Sirupsen/logrus"
 
@@ -52,9 +56,10 @@ type K8sOperations interface {
 }
 
 type AppOperations struct {
-	tops team.Operations
-	kops K8sOperations
-	st   st.Storage
+	tops        team.Operations
+	kops        K8sOperations
+	st          st.Storage
+	KopsFactory func() K8sOperations
 }
 
 const (
@@ -342,25 +347,61 @@ func (ops *AppOperations) List(user *storage.User) ([]*AppListItem, error) {
 	if err != nil {
 		return nil, err
 	}
-	items := make([]*AppListItem, 0)
+
+	cItems := make(chan *AppListItem, 0)
+	g, ctx := errgroup.WithContext(context.Background())
+
 	for _, team := range teams {
-		apps, err := ops.kops.NamespaceListByLabel(TeresaTeamLabel, team.Name)
-		if err != nil {
-			return nil, err
-		}
-		for _, a := range apps {
-			addrs, err := ops.kops.AddressList(a)
+		teamName := team.Name
+		g.Go(func() error {
+			start := time.Now()
+			apps, err := ops.KopsFactory().NamespaceListByLabel(TeresaTeamLabel, teamName)
+			if err != nil {
+				return err
+			}
+			elapsed := time.Since(start)
+			log.Printf("NamespaceListByLabel took %s for team %s", elapsed, teamName)
+
+			gApps, _ := errgroup.WithContext(ctx)
+			for _, a := range apps {
+				appName := a
+				gApps.Go(func() error {
+					start := time.Now()
+					addrs, err := ops.KopsFactory().AddressList(appName)
+					if err != nil {
+						return err
+					}
+					elapsed := time.Since(start)
+					log.Printf("AddressList took %s for app %s", elapsed, appName)
+					cItems <- &AppListItem{Team: teamName, Name: appName, Addresses: addrs}
+					return nil
+				})
+			}
+			return gApps.Wait()
+		})
+	}
+
+	gChan := make(chan error, 0)
+	go func() { gChan <- g.Wait() }()
+
+	items := make([]*AppListItem, 0)
+	start := time.Now()
+	for {
+		select {
+		case item, ok := <-cItems:
+			if !ok {
+				elapsed := time.Since(start)
+				log.Printf("for with select took %s", elapsed)
+				return items, nil
+			}
+			items = append(items, item)
+		case err = <-gChan:
 			if err != nil {
 				return nil, err
 			}
-			items = append(items, &AppListItem{
-				Team:      team.Name,
-				Name:      a,
-				Addresses: addrs,
-			})
+			close(cItems)
 		}
 	}
-	return items, nil
 }
 
 func NewOperations(tops team.Operations, kops K8sOperations, st st.Storage) Operations {
