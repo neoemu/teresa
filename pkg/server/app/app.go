@@ -28,6 +28,7 @@ type Operations interface {
 	UnsetEnv(user *database.User, appName string, evs []string) error
 	List(user *database.User) ([]*AppListItem, error)
 	SetAutoscale(user *database.User, appName string, as *Autoscale) error
+	Delete(user *database.User, appName string) error
 }
 
 type K8sOperations interface {
