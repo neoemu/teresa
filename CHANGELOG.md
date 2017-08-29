@@ -5,6 +5,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 ## [Next Version] - Release Date
 ### Added
 - Command 'deploy list'
+- [helm] minio as dependency
 
 ### Changed
 - Deploys are now performed using the 'deploy create' command
