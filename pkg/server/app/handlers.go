@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"time"
 
 	context "golang.org/x/net/context"
@@ -101,6 +102,18 @@ func (s *Service) List(ctx context.Context, _ *appb.Empty) (*appb.ListResponse, 
 	}
 
 	return newListResponse(apps), nil
+}
+
+func (s *Service) Delete(ctx context.Context, req *appb.DeleteRequest) (*appb.Empty, error) {
+	user := ctx.Value("user").(*database.User)
+
+	if err := s.ops.Delete(user, req.Name); err != nil {
+		return nil, nil
+	}
+
+	fmt.Println("TESTE!!!")
+
+	return &appb.Empty{}, nil
 }
 
 func (s *Service) SetAutoscale(ctx context.Context, req *appb.SetAutoscaleRequest) (*appb.Empty, error) {

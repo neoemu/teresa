@@ -392,6 +392,18 @@ func (ops *AppOperations) SetAutoscale(user *database.User, appName string, as *
 	return nil
 }
 
+func (ops *AppOperations) Delete(user *database.User, appName string) error {
+	if _, err := ops.checkPermAndGet(user, appName); err != nil {
+		return teresa_errors.NewInternalServerError(err)
+	}
+
+	if err := ops.kops.DeleteNamespace(appName); err != nil {
+		return teresa_errors.NewInternalServerError(err)
+	}
+
+	return nil
+}
+
 func NewOperations(tops team.Operations, kops K8sOperations, st st.Storage) Operations {
 	return &AppOperations{tops: tops, kops: kops, st: st}
 }
